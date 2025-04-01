@@ -1,0 +1,117 @@
+
+
+a_id 	 a_name  	address 	dob 		number
+
+1 	John New York, 	USA  		1990-03-13  	9876543210
+2	John wick	New York, USA	1990-03-13	9876543220
+3	John der	New York, USA	1990-03-13	9876243220
+4	John der	New York, USA	1990-03-13	9826243220
+
+
+
+b_id	b_name		publish_date
+
+1	C		1981-10-15
+2	HTML		1980-10-15
+3	Spring MVC	2025-04-10
+
+
+book_id	author_id
+1	1
+2	1
+2	2
+2	3
+2	4
+3	4
+
+
+package com.model;
+
+import java.time.LocalDate;
+import java.util.Date;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.format.annotation.DateTimeFormat;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.validation.constraints.Pattern;
+import lombok.Data;
+
+@Entity
+@Data
+public class Book 
+{
+	
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long bId;
+	
+	
+	
+	@JsonProperty("bName")
+	private String bName;
+	
+	@DateTimeFormat(pattern = "dd-MM-yyyy")
+	private LocalDate publishDate;
+	
+	@ManyToMany(cascade = CascadeType.ALL,fetch = FetchType.EAGER)
+	@JoinTable(name="book_author",
+				joinColumns = @JoinColumn(name="bookId"),
+				inverseJoinColumns = @JoinColumn(name="authorId"))
+	private Set<Author> authors;
+
+}
+
+package com.model;
+
+import java.time.LocalDate;
+import java.util.Set;
+
+import org.springframework.format.annotation.DateTimeFormat;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToMany;
+import lombok.Data;
+
+@Entity
+@Data
+public class Author 
+{
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long aId;
+	
+	@JsonProperty("aName")
+	private String aName;
+	
+	private Long number;
+	
+	private String address;
+	
+	@DateTimeFormat(pattern = "dd-MM-yyyy")
+	
+	private LocalDate dob;
+	
+	@ManyToMany(mappedBy = "authors",cascade = CascadeType.ALL,fetch = FetchType.EAGER)
+	public Set<Book> books;
+	
+}

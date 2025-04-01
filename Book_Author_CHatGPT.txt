@@ -1,0 +1,305 @@
+package com.model;
+
+
+import jakarta.persistence.*;
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import java.util.HashSet;
+import java.util.Set;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+
+
+@Entity
+public class Book {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+
+    @ManyToMany(cascade = CascadeType.ALL)
+    @JoinTable(name = "book_author",
+            joinColumns = @JoinColumn(name = "book_id"),
+            inverseJoinColumns = @JoinColumn(name = "author_id"))
+    @JsonIgnoreProperties("books")          // ✅ Infinite recursion aur concurrent modification avoid
+    private Set<Author> authors = new HashSet<>();
+
+    // Getters and Setters
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Set<Author> getAuthors() {
+        return authors;
+    }
+
+    public void setAuthors(Set<Author> authors) {
+        this.authors = authors;
+    }
+}
+package com.model;
+
+import java.util.HashSet;
+import java.util.Set;
+
+import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+@Entity
+public class Author {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+
+    @ManyToMany(mappedBy = "authors")
+    @JsonIgnoreProperties("authors")          // ✅ Infinite recursion aur concurrent modification avoid
+    private Set<Book> books = new HashSet<>();
+
+    // Getters and Setters
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Set<Book> getBooks() {
+        return books;
+    }
+
+    public void setBooks(Set<Book> books) {
+        this.books = books;
+    }
+}
+package com.repository;
+
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.model.Author;
+
+import org.springframework.stereotype.Repository;
+
+public interface AuthorRepository extends JpaRepository<Author, Long> {
+	 Optional<Author> findByName(String name);  
+}
+package com.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.model.Book;
+
+
+public interface BookRepository extends JpaRepository<Book, Long> {
+	Optional<Book>  findByName(String name);
+}
+package com.service;
+
+
+import java.util.List;
+
+import com.model.Book;
+
+public interface BookService {
+    Book saveBook(Book book);
+    Book getBookById(Long id);
+    List<Book> getAllBooks();
+    void deleteBook(Long id);
+//       List<BookDTO> getAllBooks();
+}
+package com.service;
+
+import org.springframework.stereotype.Service;
+
+import com.model.Author;
+import com.model.Book;
+import com.model.BookDTO;
+import com.repository.AuthorRepository;
+import com.repository.BookRepository;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+
+@Service
+public class BookServiceImpl implements BookService {
+
+    @Autowired
+    private BookRepository bookRepo;
+
+    @Autowired
+    private AuthorRepository authorRepo;
+
+    // ✅ Save Book with Duplicate Handling
+    @Override
+    public Book saveBook(Book book) {
+        Set<Author> authors = new HashSet<>();
+
+        // ✅ Author Handling (Duplicate Avoidance)
+        for (Author author : book.getAuthors()) {
+            Optional<Author> existingAuthor = authorRepo.findByName(author.getName());
+
+            if (existingAuthor.isPresent()) {    
+                authors.add(existingAuthor.get());   // ID fetch (if exists)
+            } else {
+                authors.add(author);               // Naya record create
+            }
+        }
+
+        book.setAuthors(authors);
+
+        // ✅ Book Handling (Duplicate Avoidance)
+        Optional<Book> existingBook = bookRepo.findByName(book.getName());
+
+        if (existingBook.isPresent()) {
+            return existingBook.get();     // Book already exists → return existing one
+        }
+
+        return bookRepo.save(book);        // Nahi hai to naya book create
+    }
+
+    // ✅ Fetch All Books with Authors
+//    @Override
+//    public List<Book> getAllBooks() {
+//        return bookRepo.findAll();
+//    }
+
+    // ✅ Fetch Book by ID with Authors
+    @Override
+    public Book getBookById(Long id) {
+        return bookRepo.findById(id).orElseThrow(() -> new RuntimeException("Book not found with ID: " + id));
+    }
+
+    // ✅ Delete Book (and Cascade Delete from Join Table)
+    @Override
+    public void deleteBook(Long id) {
+        Book book = bookRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Book not found with ID: " + id));
+
+        bookRepo.delete(book);
+    }
+    
+    
+//    @Override
+//    public List<BookDTO> getAllBooks() {
+//        List<Book> books = bookRepo.findAll();
+//        return books.stream().map(book -> {
+//            Set<String> authorNames = book.getAuthors()
+//                    .stream()
+//                    .map(author -> author.getName())
+//                    .collect(Collectors.toSet());
+//            
+//            return new BookDTO(book.getId(), book.getName(), authorNames);
+//        }).collect(Collectors.toList());
+//    }
+    
+    public List<Book> getAllBooks() {
+        return bookRepo.findAll();         // ✅ JPA method se direct entity fetch ho rahi hai
+    }
+}
+package com.controller;
+
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.model.Author;
+import com.model.Book;
+import com.model.BookDTO;
+import com.repository.BookRepository;
+import com.service.BookService;
+import com.service.BookServiceImpl;
+
+
+@RestController
+@RequestMapping("/api")
+public class BookController 
+{
+	
+	
+
+	    private final BookService bookService;
+
+	    public BookController(BookService bookService) {
+	        this.bookService = bookService;
+	    }
+
+	    @PostMapping("/book")
+	    public ResponseEntity<Book> saveBook(@RequestBody Book book) {
+	        return ResponseEntity.ok(bookService.saveBook(book));
+	    }
+
+	    @GetMapping("/getById/{id}")
+	    public ResponseEntity<Book> getBookById(@PathVariable Long id) {
+	        return ResponseEntity.ok(bookService.getBookById(id));
+	    }
+
+	    @GetMapping("/getAll")
+	    public ResponseEntity<List<Book>> getAllBooks() {
+	        return ResponseEntity.ok(bookService.getAllBooks());
+	    }
+
+	    @DeleteMapping("/deleteById/{id}")
+	    public ResponseEntity<String> deleteBook(@PathVariable Long id) {
+	        bookService.deleteBook(id);
+	        return ResponseEntity.ok("Book deleted successfully!");
+	    }
+	
+
+
+  
+}
+
+
+

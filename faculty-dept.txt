@@ -1,0 +1,583 @@
+ package com.model;
+
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;   // ✅ Add this
+import jakarta.persistence.*;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Entity
+@Data
+public class Faculty {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long fId;
+
+    @NotNull(message = "FacultyName can not be null")
+    @Size(min = 3, max = 20, message = "Name should be min 3 to 20")
+    private String facultyName;
+
+    @NotNull(message = "Number cannot be null")
+    @Min(value = 1000000000L, message = "Number should be 10 digits")
+    @Max(value = 9999999999L, message = "Number should be 10 digits")
+    private Long facultyNumber;
+
+    @NotNull(message = "Salary cannot be null")
+    @DecimalMin(value = "15000")
+    @DecimalMax(value = "200000")
+    private double salary;
+
+    @JsonBackReference   // ✅ Circular dependency se bachne ke liye
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "d_id", referencedColumnName = "d_id", foreignKey = @ForeignKey(name = "fk_dId"))
+    private Department dept;
+}
+
+
+
+package com.model;
+
+import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Entity
+@Data
+@NoArgsConstructor
+public class Department {
+
+    public Department(Long dId2, String deptName2) {
+		// TODO Auto-generated constructor stub
+	}
+
+	@Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "d_id")
+    @JsonProperty("dId")   // JSON se dId map kari
+    private Long dId;
+
+
+    @NotNull
+    @Size(min = 2,max = 20,message = "Department Name should be minimum 2-20")
+    private String deptName;
+
+    @JsonManagedReference 
+    @OneToMany(mappedBy = "dept", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Faculty> faculty;  
+    
+    
+}   
+    
+
+package com.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.model.Department;
+
+public interface DeptRepository extends JpaRepository<Department,Long> 
+{
+	
+	@Query("SELECT d FROM Department d WHERE d.deptName = :name")
+	Department getByName(@Param("name") String name);
+
+	
+}
+
+package com.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.model.Faculty;
+
+public interface FacultyRepository extends JpaRepository<Faculty, Long>{
+
+}
+
+package com.service;
+
+import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+
+import com.exception.ResourceNotFoundException;
+import com.model.Department;
+
+public interface DeptServiceInterface 
+{
+	public ResponseEntity<?> saveDepartment(Department d);
+	public List<?> getAllDepartmentDetail();
+	public List<?> getDepartmentDetail();
+	public ResponseEntity<?> getById(Long id) throws ResourceNotFoundException;
+	public ResponseEntity<?> deleteById(Long id) throws ResourceNotFoundException;
+	public ResponseEntity<?> updateDepartment(Long id,Department d) throws ResourceNotFoundException;
+
+}
+package com.service;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+
+import com.exception.ResourceNotFoundException;
+import com.model.Department;
+import com.model.DepartmentDTO;
+import com.repository.DeptRepository;
+
+import jakarta.transaction.Transactional;
+
+@Service
+public class DepartmentServiceImpl implements DeptServiceInterface
+{
+
+	@Autowired
+	private DeptRepository dr;
+	
+	@Transactional
+	@Override
+	public ResponseEntity<?> saveDepartment(Department d) 
+	{
+		
+		System.out.println("Service = "+d);
+		 Department byName = dr.getByName(d.getDeptName());
+		 System.out.println(byName);
+		if ((byName== null)) 
+		    {
+		        Department saveDepartment = dr.save(d);
+		        return ResponseEntity.status(HttpStatus.CREATED)
+		                .body(Map.of("Data Save", saveDepartment));
+		    } else {
+		        return ResponseEntity.ok().body("Data Already inserted: " + d.getDeptName());
+		    }
+		
+	}
+
+//	@Transactional
+//	@Override
+//	public ResponseEntity<?> saveDepartment(Department d) {
+//
+//	    System.out.println("Service = " + d);
+//	    Department byName = dr.getByName(d.getDeptName().trim());
+//
+//	    if (byName != null) {
+//	        return ResponseEntity.ok().body("Data Already inserted: " + d.getDeptName());
+//	    }
+//
+//	    Department saveDepartment = dr.save(d);
+//	    
+//	    return ResponseEntity.status(HttpStatus.CREATED)
+//	            .body(Map.of("Data Saved", saveDepartment));
+//	}
+
+	
+	
+	@Transactional
+	@Override
+	public List<?> getAllDepartmentDetail() 
+	{
+		List<Department> getAllDepartmentDetail = dr.findAll();
+		if(getAllDepartmentDetail.isEmpty())
+		{
+			return List.of(Map.of("Message","DataBase is Empty"));
+		}
+		return getAllDepartmentDetail;
+	}
+
+	@Override
+	public ResponseEntity<?> getById(Long id) throws ResourceNotFoundException 
+	{
+		
+		Department deptById = dr.findById(id).orElseThrow(()->new ResourceNotFoundException("Department not available = "+ id));
+		return  ResponseEntity.ok(Map.of("Message","Faculty Data available\n","Data",deptById));
+	}
+
+	@Override
+	public ResponseEntity<?> deleteById(Long id) throws ResourceNotFoundException 
+	{
+		Department dept = dr.findById(id)
+				.orElseThrow(()-> new ResourceNotFoundException("Data not availble with id "+ id));
+		
+		dr.deleteById(id);
+		return ResponseEntity.ok(Map.of("Message","Data is present\n","Data",dept));
+	}
+
+	
+	@Override
+	public ResponseEntity<?> updateDepartment(Long id, Department d) throws ResourceNotFoundException 
+	{
+		Department updateData = dr.findById(id).orElseThrow(()->new ResourceNotFoundException("Id not available = "+id));
+		
+		updateData.setDeptName(d.getDeptName());
+		updateData.setDId(d.getDId());
+		
+		Department updatedData = dr.save(updateData);
+		
+		return ResponseEntity.ok(Map.of("message", "Data successfully updated", "data", updatedData));
+	}
+
+	@Transactional
+    @Override
+    public List<DepartmentDTO> getDepartmentDetail() {
+
+        // ✅ Department ki list fetch kar rahe hain
+        List<Department> detail = dr.findAll();
+
+        // ✅ DTO me map kar rahe hain taaki sirf `dId` aur `deptName` fetch ho
+        List<DepartmentDTO> dtoList = detail.stream()
+                .map(d -> new DepartmentDTO(d.getDId(), d.getDeptName()))
+                .collect(Collectors.toList());
+
+        // ✅ Console me print karne ke liye loop
+        dtoList.forEach(d -> {
+            System.out.println("ID: " + d.getDId() + ", Name: " + d.getDeptName());
+        });
+
+        // ✅ Database empty hone par message
+        if (dtoList.isEmpty()) {
+            return List.of(new DepartmentDTO(0L, "Database is Empty"));
+        }
+
+        return dtoList;
+    }
+
+}
+package com.service;
+
+import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+
+import com.exception.ResourceNotFoundException;
+import com.model.Faculty;
+
+public interface FacultyServiceInterface 
+{
+	public ResponseEntity<?> savefaculty(Faculty f) throws ResourceNotFoundException ;
+	public List<?> getAllfaculty();
+	public ResponseEntity<?> getByFId(Long id) throws ResourceNotFoundException;
+	public ResponseEntity<?> deleteByFId(Long id) throws ResourceNotFoundException;
+	public ResponseEntity<?> updatefaculty(Long id,Faculty d) throws ResourceNotFoundException;
+
+	
+	
+
+}
+package com.service;
+
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+
+import com.exception.ResourceNotFoundException;
+import com.model.Department;
+import com.model.Faculty;
+import com.repository.DeptRepository;
+import com.repository.FacultyRepository;
+
+import jakarta.transaction.Transactional;
+
+@Service
+public class FacultyServiceImpl implements FacultyServiceInterface
+{
+	@Autowired
+	private FacultyRepository fr;
+
+	@Autowired
+	private DeptRepository dr;
+
+	
+	
+	
+	@Transactional
+	@Override
+	public ResponseEntity<?> savefaculty(Faculty f) throws ResourceNotFoundException 
+	{
+
+	    Department dept;
+
+	    if (f.getDept() != null && f.getDept().getDId() != null) 
+		    {
+		        dept = dr.findById(f.getDept().getDId()).orElseThrow(() -> 
+		        new ResourceNotFoundException("Department not found with ID: " + f.getDept().getDId()));
+		    } 
+	    else 
+		    {
+		        dept = dr.save(f.getDept());
+		    }
+
+	    f.setDept(dept);
+
+	    Faculty savedFaculty = fr.save(f);
+
+	    return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+	            "message", "Data saved successfully",
+	            "data", savedFaculty
+	    ));
+	}
+
+	
+	
+
+	@Override
+	public List<?> getAllfaculty() {
+		List<Faculty> getAllFacultyDetail = fr.findAll();
+		if(getAllFacultyDetail.isEmpty())
+		{
+			return List.of(Map.of("Message","DataBase is Empty"));
+		}
+		return getAllFacultyDetail;
+	}
+
+	@Override
+	public ResponseEntity<?> getByFId(Long id) throws ResourceNotFoundException {
+		Faculty deptById = fr.findById(id).orElseThrow(()->new ResourceNotFoundException("Faculty not available = "+ id));
+		return  ResponseEntity.ok(Map.of("Message","Faculty Data available\n","Data",deptById));
+	}
+
+	@Override
+	public ResponseEntity<?> deleteByFId(Long id) throws ResourceNotFoundException {
+		Faculty dept = fr.findById(id)
+				.orElseThrow(()-> new ResourceNotFoundException("Data not availble with id "+ id));
+		
+		fr.deleteById(id);
+		return ResponseEntity.ok(Map.of("Message","Data is present\n","Data",dept));
+	}
+
+	@Override
+	public ResponseEntity<?> updatefaculty(Long id, Faculty d) throws ResourceNotFoundException {
+		Faculty updateData = fr.findById(id).orElseThrow(()->new ResourceNotFoundException("Id not available = "+id));
+		
+		updateData.setFacultyName(d.getFacultyName());
+		updateData.setFacultyNumber(d.getFacultyNumber());
+		updateData.setSalary(d.getSalary());
+		updateData.setFacultyNumber(d.getFacultyNumber());
+	//	updateData.setDept(d.);
+		
+		Faculty updatedData = fr.save(updateData);
+		
+		return ResponseEntity.ok(Map.of("message", "Data successfully updated", "data", updatedData));
+	}
+
+}
+
+
+
+//@Transactional ka fayda:
+//Consistency:
+//	-Agar Department save hone ke baad Faculty save nahi hoti to Department bhi rollback ho jayega.
+//	-Isse data inconsistency se bachte hain.
+
+
+//	-Bina @Transactional ke:
+//		-Department save ho jata, lekin Faculty save nahi hoti
+//		-DB me inconsistent data hota.
+
+
+//Rollback on exception:
+//	-Agar koi exception aata hai (jaise department ID nahi mili) to poora transaction rollback ho jata hai.
+
+//	-Bina @Transactional ke:
+//				-Department save ho jata, par Faculty nahi hoti
+//				-Data inconsistency hoti.
+package com.controller;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.List;
+
+import javax.sql.DataSource;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.exception.ResourceNotFoundException;
+import com.model.Faculty;
+import com.service.FacultyServiceImpl;
+
+import jakarta.validation.Valid;
+
+@RestController
+@RequestMapping("/api")
+public class FacultyController 
+{
+	
+	@Autowired
+	private FacultyServiceImpl fs;
+	
+	
+	@PostMapping(path = "/saveFData")
+	public ResponseEntity<?> saveFacultyData(@RequestBody Faculty f) throws ResourceNotFoundException
+	{
+			System.out.println("Id ="+f.getDept().getDId());
+		System.out.println(f);
+		 System.out.println("Received Faculty: " + f);
+		    System.out.println("Department ID: " + (f.getDept() != null ? f.getDept().getDId() : "NULL"));   // ✅ Check for null safety
+		return fs.savefaculty(f);
+		
+	}
+	
+	@GetMapping(path = "/findFAll")
+	public List<?> getAllFacultyData()
+	{
+		return fs.getAllfaculty();
+	}
+	
+	@GetMapping(path = "/findByFId/{id}")
+	public ResponseEntity<?> getFacultyDataById(@PathVariable Long id) throws ResourceNotFoundException
+	{
+		return fs.getByFId(id);
+	}
+	
+	@GetMapping(path = "/deleteByFId/{id}")
+	public ResponseEntity<?> deleteFacultyData(@PathVariable Long id) throws ResourceNotFoundException
+	{
+		return fs.deleteByFId(id);
+	}
+	
+	@GetMapping(path = "/updateByFId/{id}")
+	public ResponseEntity<?> updateFacultyData(@PathVariable Long id,Faculty f) throws ResourceNotFoundException
+	{
+		return fs.updatefaculty(id, f);
+	}
+}
+package com.controller;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.exception.ResourceNotFoundException;
+import com.service.DepartmentServiceImpl;
+import com.service.FacultyServiceImpl;
+
+import jakarta.validation.Valid;
+
+@RestController
+@RequestMapping("/api")
+public class DepartmentController 
+{
+	@Autowired
+	private DepartmentServiceImpl ds;
+	
+	
+	@PostMapping(path = "/saveData")
+	public ResponseEntity<?> saveDepartmentData(@Valid @RequestBody com.model.Department f)
+	{
+		System.out.println(f);
+		return ds.saveDepartment(f);
+	}
+	
+	@GetMapping(path = "/findAll")
+	public List<?> AllDepartmentDetail()
+	{
+		return ds.getAllDepartmentDetail();
+	}
+	
+	
+	@GetMapping(path = "/findDept")
+	public List<?> Department()
+	{
+		return ds.getDepartmentDetail();
+	}
+	@GetMapping(path = "/findById/{id}")
+	public ResponseEntity<?> getFacultyDataById(@PathVariable Long id) throws ResourceNotFoundException
+	{
+		return ds.getById(id);
+	}
+	
+	@GetMapping(path = "/deleteById/{id}")
+	public ResponseEntity<?> deleteDepartmentData(@PathVariable Long id) throws ResourceNotFoundException
+	{
+		return ds.deleteById(id);
+	}
+	
+	@GetMapping(path = "/updateById/{id}")
+	public ResponseEntity<?> updateDepartmentData(@PathVariable Long id,com.model.Department f) throws ResourceNotFoundException
+	{
+		return ds.updateDepartment(id, f);
+	}
+
+}
+CREATE TABLE IF NOT EXISTS `department` (
+  `d_id` bigint NOT NULL AUTO_INCREMENT,
+  `dept_name` varchar(20) NOT NULL,
+  PRIMARY KEY (`d_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `department`
+--
+
+INSERT INTO `department` (`d_id`, `dept_name`) VALUES
+(1, 'MA'),
+(2, 'BCA');
+COMMIT;CREATE TABLE IF NOT EXISTS `faculty` (
+  `f_id` bigint NOT NULL AUTO_INCREMENT,
+  `faculty_name` varchar(20) NOT NULL,
+  `faculty_number` bigint NOT NULL,
+  `salary` double NOT NULL,
+  `d_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`f_id`),
+  KEY `fk_did` (`d_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `faculty`
+--
+
+INSERT INTO `faculty` (`f_id`, `faculty_name`, `faculty_number`, `salary`, `d_id`) VALUES
+(1, 'Shadab', 8269686936, 50000, 1),
+(2, 'Ayan', 8269686936, 50000, 2),
+(3, 'Moin', 8269686936, 50000, 2);
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `faculty`
+--
+ALTER TABLE `faculty`
+  ADD CONSTRAINT `fk_did` FOREIGN KEY (`d_id`) REFERENCES `department` (`d_id`);
+COMMIT; ye faculty or department ka code hai isme department fetch karne par sabhi faculty ki detail aa rahui hai
