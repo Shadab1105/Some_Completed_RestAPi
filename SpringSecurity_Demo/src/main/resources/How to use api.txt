@@ -1,0 +1,22 @@
+First send the data 
+
+localhost:8080/api/saveData
+
+{
+	"name":"Shadab",
+"email":"shadab@gmail.com"
+"roles":[
+	{"name":"ROLE_ADMIN"},
+	{"name":"ROLE_USER"}
+	]
+}
+
+After that use this url to generate "JWT Token"
+
+localhost:8080/auth/login
+
+and give email and password in the body
+
+then it generate the Access Token, Referesh Toke, and User
+
+then we can pass the token in the RoleBase Authentication
