@@ -1,0 +1,81 @@
+******** How to Use Roll Base With Jwt Token*********
+
+*******Step 1- 
+
+we send the data on this API.
+
+""""""""localhost:8080/api/saveData""""""""""
+
+{
+  "name": "shadab",
+  "password": "shadab",
+  "email": "shadab@gmail.com",
+  "roles":[
+    {
+      "name": "ROLE_ADMIN"
+    }]
+  
+}
+
+and it return Data like ---
+
+{
+    "uid": "3211873c-d427-47f8-b12c-1bc2f2dd843c",
+    "name": "shadab",
+    "password": "$2a$10$e6pXqsSV8kvEC/fL8a.gKeCc.k4/CCjLQuvqs44gi9VFobZ8C4Gmu",
+    "email": "shadab@gmail.com",
+    "enable": true,
+    "roles": [
+        {
+            "id": 1,
+            "name": "ROLE_ADMIN"
+        }
+    ]
+}
+
+
+
+
+*******Step 2-
+
+
+We have to generate the JWT token to know the user (like- Admin, User,Public )
+This url to generate "JWT Token"
+
+"""""""""""localhost:8080/auth/login""""""""""
+
+and give email and password in the body Like--
+
+{
+  "email": "shadab@gmail.com",
+  "password": "shadab"
+}
+
+
+then it generate the Access Token, Referesh Toke, and User Like --
+
+
+{
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzaGFkYWJAZ21haWwuY29tIiwiaWF0IjoxNzQ1MzAyNzgzLCJleHAiOjE3NDUzMDM2ODN9.x3T8aRc_83szOikCNzAXAxo5retol1Z-yJ18CXXHFWk",
+    
+"refreshToken": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzaGFkYWJAZ21haWwuY29tIiwiaWF0IjoxNzQ1MzAyNzgzLCJleHAiOjE3NDU0NzU1ODN9.yy3pXlqbnre1LsbSQ9qgGx6CSJidanIEgZH3fas7t3Y",
+    
+"user": {
+        "uid": "3211873c-d427-47f8-b12c-1bc2f2dd843c",
+        "name": "shadab",
+        "password": "$2a$10$e6pXqsSV8kvEC/fL8a.gKeCc.k4/CCjLQuvqs44gi9VFobZ8C4Gmu",
+        "email": "shadab@gmail.com",
+        "enable": true,
+        "roles": []
+    }
+}
+
+
+
+*******Step 3-
+
+Now, We can use Roll Base Authentication and will use this URL
+
+""""""""""""""""localhost:8080/role/findAll""""""""""
+
+use this URL and in Authorization tab we select Bearer Token After Select it generate a Box and in this we paste only Access Token
